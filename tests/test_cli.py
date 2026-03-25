@@ -196,3 +196,24 @@ def test_init_sets_file_permissions(runner, tmp_path):
     config_file = config_dir / "config.yaml"
     mode = config_file.stat().st_mode & 0o777
     assert mode == 0o600
+
+
+def test_config_show(runner, config_home):
+    result = runner.invoke(cli, [
+        "config", "show",
+        "--config-dir", str(config_home),
+    ])
+    assert result.exit_code == 0
+    assert "smtp.example.com" in result.output
+    assert "me@example.com" in result.output
+    # Password should be masked
+    assert "secret" not in result.output
+    assert "***" in result.output
+
+
+def test_config_show_no_config(runner, tmp_path):
+    result = runner.invoke(cli, [
+        "config", "show",
+        "--config-dir", str(tmp_path / "nonexistent"),
+    ])
+    assert result.exit_code != 0

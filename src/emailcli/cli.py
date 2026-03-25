@@ -116,3 +116,27 @@ def init(config_dir):
     os.chmod(config_file, 0o600)
 
     click.echo(f"\nConfig saved to {config_file}")
+
+
+@cli.group(name="config")
+def config_group():
+    """Manage emailcli configuration."""
+
+
+@config_group.command()
+@click.option("--config-dir", default=None, type=click.Path(), hidden=True, help="Config directory (for testing).")
+def show(config_dir):
+    """Show current configuration."""
+    try:
+        cfg_dir = Path(config_dir) if config_dir else None
+        cfg = load_config(cfg_dir)
+
+        click.echo(f"From:       {cfg.from_addr}")
+        click.echo(f"SMTP Host:  {cfg.smtp_host}")
+        click.echo(f"SMTP Port:  {cfg.smtp_port}")
+        click.echo(f"Username:   {cfg.smtp_username}")
+        click.echo(f"Password:   ***")
+        click.echo(f"Encryption: {cfg.smtp_encryption}")
+    except EmailCliError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
