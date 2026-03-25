@@ -27,9 +27,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ClaymanTwinkle/Email-CLI"
-Repository = "https://github.com/ClaymanTwinkle/Email-CLI"
-Issues = "https://github.com/ClaymanTwinkle/Email-CLI/issues"
+Homepage = "https://github.com/ClaymanTwinkle/email-cli-tool"
+Repository = "https://github.com/ClaymanTwinkle/email-cli-tool"
+Issues = "https://github.com/ClaymanTwinkle/email-cli-tool/issues"
 
 [project.scripts]
 emailcli = "emailcli.cli:cli"

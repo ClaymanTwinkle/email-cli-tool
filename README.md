@@ -1,4 +1,4 @@
-# emailcli
+# email-cli-tool
 
 > A simple CLI tool for sending emails with plain text, HTML, and file attachments.
 >

@@ -1,4 +1,4 @@
-# emailcli
+# email-cli-tool
 
 > 一个简洁的命令行邮件发送工具，支持纯文本、HTML 和文件附件。
 >
