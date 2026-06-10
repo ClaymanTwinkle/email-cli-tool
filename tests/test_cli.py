@@ -1,3 +1,4 @@
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -217,3 +218,9 @@ def test_config_show_no_config(runner, tmp_path):
         "--config-dir", str(tmp_path / "nonexistent"),
     ])
     assert result.exit_code != 0
+
+
+def test_version_option(runner):
+    result = runner.invoke(cli, ["--version"])
+    assert result.exit_code == 0
+    assert pkg_version("email-cli-tool") in result.output

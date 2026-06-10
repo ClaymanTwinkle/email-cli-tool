@@ -11,6 +11,7 @@ from emailcli import skill_install
 
 
 @click.group()
+@click.version_option(package_name="email-cli-tool")
 def cli():
     """CLI tool for sending emails with attachments."""
 
