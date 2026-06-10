@@ -1,7 +1,11 @@
-import pytest
 from importlib.resources import files
+from unittest.mock import patch
 
-from emailcli.skill_install import install_skill, load_skill_content
+import pytest
+from click.testing import CliRunner
+
+from emailcli.cli import cli
+from emailcli.skill_install import InstallResult, install_skill, load_skill_content
 
 
 def test_bundled_skill_md_is_packaged():
@@ -43,3 +47,42 @@ def test_install_is_idempotent(tmp_path):
 def test_install_unknown_target_raises(tmp_path):
     with pytest.raises(ValueError):
         install_skill(tmp_path, ["vim"])
+
+
+def test_cli_skill_install_default_writes_both(tmp_path):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["skill", "install", "--home", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert (tmp_path / ".claude" / "skills" / "send-email" / "SKILL.md").exists()
+    assert (tmp_path / ".codex" / "skills" / "send-email" / "SKILL.md").exists()
+    assert "Claude" in result.output
+    assert "Codex" in result.output
+
+
+def test_cli_skill_install_target_codex(tmp_path):
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["skill", "install", "--target", "codex", "--home", str(tmp_path)]
+    )
+
+    assert result.exit_code == 0
+    assert (tmp_path / ".codex" / "skills" / "send-email" / "SKILL.md").exists()
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_cli_skill_install_invalid_target(tmp_path):
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["skill", "install", "--target", "vim", "--home", str(tmp_path)]
+    )
+
+    assert result.exit_code != 0
+
+
+def test_cli_skill_install_failure_exit_code(tmp_path):
+    failed = [InstallResult("claude", tmp_path / "SKILL.md", "failed", "boom")]
+    runner = CliRunner()
+    with patch("emailcli.skill_install.install_skill", return_value=failed):
+        result = runner.invoke(cli, ["skill", "install", "--home", str(tmp_path)])
+    assert result.exit_code == 1
