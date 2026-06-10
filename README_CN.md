@@ -97,6 +97,21 @@ echo "邮件内容" | emailcli send \
 
 查看当前配置（密码已脱敏）。
 
+### `emailcli skill install`
+
+安装 `send-email` 技能，让 Claude Code 或 Codex 可以直接帮你发邮件。
+
+```bash
+# 默认同时安装到 Claude Code 和 Codex
+emailcli skill install
+
+# 只装其中一个
+emailcli skill install --target claude
+emailcli skill install --target codex
+```
+
+会把 `SKILL.md` 写入 `~/.claude/skills/send-email/` 和/或 `~/.codex/skills/send-email/`。
+
 ## 配置文件
 
 路径：`~/.emailcli/config.yaml`
