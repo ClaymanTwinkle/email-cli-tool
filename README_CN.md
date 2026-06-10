@@ -16,12 +16,21 @@
 ## 安装
 
 ```bash
-# 从 PyPI 安装
+# 从 PyPI 安装（最新版）
 pip install email-cli-tool
 
+# 安装指定版本
+pip install email-cli-tool==0.2.0
+
+# 升级已安装的版本
+pip install --upgrade email-cli-tool
+
 # 或使用 uv
-uv tool install email-cli-tool
+uv tool install email-cli-tool          # 最新版
+uv tool install email-cli-tool==0.2.0   # 指定版本
 ```
+
+> `emailcli skill install` 命令需要 **0.2.0** 或更高版本。
 
 ## 快速开始
 

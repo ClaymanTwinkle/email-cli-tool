@@ -16,12 +16,21 @@
 ## Installation
 
 ```bash
-# From PyPI
+# From PyPI (latest)
 pip install email-cli-tool
 
+# Install a specific version
+pip install email-cli-tool==0.2.0
+
+# Upgrade an existing install
+pip install --upgrade email-cli-tool
+
 # Or with uv
-uv tool install email-cli-tool
+uv tool install email-cli-tool          # latest
+uv tool install email-cli-tool==0.2.0   # specific version
 ```
+
+> The `emailcli skill install` command requires version **0.2.0** or newer.
 
 ## Quick Start
 
