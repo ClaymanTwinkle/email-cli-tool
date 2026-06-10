@@ -97,6 +97,21 @@ Interactively create the configuration file at `~/.emailcli/config.yaml`.
 
 Display current configuration (password is masked).
 
+### `emailcli skill install`
+
+Install the `send-email` agent skill so Claude Code or Codex can send mail for you.
+
+```bash
+# Install for both Claude Code and Codex (default)
+emailcli skill install
+
+# Only one agent
+emailcli skill install --target claude
+emailcli skill install --target codex
+```
+
+Writes `SKILL.md` to `~/.claude/skills/send-email/` and/or `~/.codex/skills/send-email/`.
+
 ## Configuration
 
 Path: `~/.emailcli/config.yaml`

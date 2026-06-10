@@ -7,6 +7,7 @@ from emailcli.config import load_config
 from emailcli.exceptions import EmailCliError
 from emailcli.message import build_message
 from emailcli.sender import SmtpSender
+from emailcli import skill_install
 
 
 @click.group()
@@ -139,4 +140,36 @@ def show(config_dir):
         click.echo(f"Encryption: {cfg.smtp_encryption}")
     except EmailCliError as e:
         click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+
+@cli.group(name="skill")
+def skill_group():
+    """Manage the emailcli agent skill."""
+
+
+@skill_group.command(name="install")
+@click.option(
+    "--target",
+    type=click.Choice(["claude", "codex", "all"]),
+    default="all",
+    show_default=True,
+    help="Which agent to install the skill for.",
+)
+@click.option("--home", default=None, type=click.Path(), hidden=True, help="Home directory (for testing).")
+def install(target, home):
+    """Install the send-email skill into Claude Code and/or Codex."""
+    home_dir = Path(home) if home else Path.home()
+    targets = ["claude", "codex"] if target == "all" else [target]
+
+    results = skill_install.install_skill(home_dir, targets)
+
+    for r in results:
+        label = skill_install.TARGET_LABELS[r.target]
+        if r.status == "failed":
+            click.echo(f"✗ {label}\t{r.path}\t(failed: {r.error})", err=True)
+        else:
+            click.echo(f"✓ {label}\t{r.path}\t({r.status})")
+
+    if any(r.status == "failed" for r in results):
         raise SystemExit(1)
