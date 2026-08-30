@@ -12,3 +12,7 @@ class MessageError(EmailCliError):
 
 class SendError(EmailCliError):
     """Email sending errors."""
+
+
+class ReceiveError(EmailCliError):
+    """Email receiving errors."""

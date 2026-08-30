@@ -12,6 +12,7 @@
 - SMTP 直连（支持 SSL / STARTTLS）
 - 交互式配置向导
 - 从 stdin 读取正文内容
+- 等待下一封新邮件（IMAP）并下载附件
 
 ## 安装
 
@@ -82,6 +83,18 @@ echo "邮件内容" | emailcli send \
   --to user@example.com --subject "Piped" --body -
 ```
 
+### 3. 等待新邮件
+
+```bash
+# 阻塞等待下一封新邮件，打印内容后退出
+emailcli watch
+
+# 最多等 5 分钟，并保存附件
+emailcli watch --timeout 300 --save-attachments ./downloads
+```
+
+需要 IMAP 配置 —— `emailcli init` 会询问，也可以手动在配置文件中加 `imap` 段（见下文）。
+
 ## 命令参考
 
 ### `emailcli send`
@@ -97,6 +110,17 @@ echo "邮件内容" | emailcli send \
 | `--from` | | | 覆盖配置中的发件人地址 |
 
 > `--body` 和 `--html` / `--html-file` 至少提供一个。
+
+### `emailcli watch`
+
+通过 IMAP 轮询等待下一封新邮件，把邮件头和正文打印到 stdout 后退出。只匹配命令启动**之后**到达的邮件；收到的邮件会被标记为已读。
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--timeout` | `0`（一直等） | 最长等待秒数，超时退出码为 `2` |
+| `--poll-interval` | `10` | 轮询间隔（秒） |
+| `--save-attachments` | | 附件保存目录 |
+| `--mailbox` | `INBOX` | 监听的邮箱文件夹 |
 
 ### `emailcli init`
 
@@ -133,6 +157,13 @@ smtp:
   username: yourname@163.com
   password: your-auth-code
   encryption: ssl  # ssl | starttls | none
+
+# 可选，仅 `emailcli watch` 需要
+imap:
+  host: imap.163.com
+  port: 993        # 默认 993
+  encryption: ssl  # 默认 ssl
+  # username/password 默认复用 smtp 的值
 ```
 
 ## 开发

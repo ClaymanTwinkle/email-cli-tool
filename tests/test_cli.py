@@ -179,7 +179,7 @@ def test_init_creates_config(runner, tmp_path):
     result = runner.invoke(cli, [
         "init",
         "--config-dir", str(config_dir),
-    ], input="me@163.com\nsmtp.163.com\n465\nme@163.com\nmypassword\nssl\n")
+    ], input="me@163.com\nsmtp.163.com\n465\nme@163.com\nmypassword\nssl\nn\n")
     assert result.exit_code == 0
     assert (config_dir / "config.yaml").exists()
 
@@ -191,7 +191,7 @@ def test_init_sets_file_permissions(runner, tmp_path):
     result = runner.invoke(cli, [
         "init",
         "--config-dir", str(config_dir),
-    ], input="me@163.com\nsmtp.163.com\n465\nme@163.com\nmypassword\nssl\n")
+    ], input="me@163.com\nsmtp.163.com\n465\nme@163.com\nmypassword\nssl\nn\n")
     assert result.exit_code == 0
 
     config_file = config_dir / "config.yaml"
@@ -224,3 +224,146 @@ def test_version_option(runner):
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
     assert pkg_version("email-cli-tool") in result.output
+
+
+@pytest.fixture
+def config_home_imap(tmp_path):
+    config_dir = tmp_path / ".emailcli"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text(yaml.dump({
+        "from": "me@example.com",
+        "smtp": {
+            "host": "smtp.example.com",
+            "port": 587,
+            "username": "me@example.com",
+            "password": "secret",
+            "encryption": "starttls",
+        },
+        "imap": {
+            "host": "imap.example.com",
+        },
+    }))
+    return config_dir
+
+
+def _sample_incoming_message(attachments=None):
+    import email
+    import email.policy
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = "sender@example.com"
+    msg["To"] = "me@example.com"
+    msg["Subject"] = "Incoming"
+    msg["Date"] = "Mon, 31 Aug 2026 10:00:00 +0800"
+    msg.set_content("Incoming body")
+    for name, data in (attachments or []):
+        msg.add_attachment(
+            data, maintype="application", subtype="octet-stream", filename=name
+        )
+    return email.message_from_bytes(bytes(msg), policy=email.policy.default)
+
+
+@patch("emailcli.cli.ImapReceiver")
+def test_watch_receives_message(mock_receiver_cls, runner, config_home_imap):
+    mock_receiver = MagicMock()
+    mock_receiver.wait_for_message.return_value = _sample_incoming_message()
+    mock_receiver_cls.return_value = mock_receiver
+
+    result = runner.invoke(cli, ["watch", "--config-dir", str(config_home_imap)])
+
+    assert result.exit_code == 0
+    assert "Subject: Incoming" in result.output
+    assert "Incoming body" in result.output
+    # IMAP credentials fall back to SMTP ones
+    mock_receiver_cls.assert_called_once_with(
+        host="imap.example.com",
+        port=993,
+        username="me@example.com",
+        password="secret",
+        encryption="ssl",
+    )
+
+
+@patch("emailcli.cli.ImapReceiver")
+def test_watch_saves_attachments(mock_receiver_cls, runner, config_home_imap, tmp_path):
+    mock_receiver = MagicMock()
+    mock_receiver.wait_for_message.return_value = _sample_incoming_message(
+        attachments=[("report.pdf", b"%PDF-1.4")]
+    )
+    mock_receiver_cls.return_value = mock_receiver
+
+    dest = tmp_path / "downloads"
+    result = runner.invoke(cli, [
+        "watch",
+        "--config-dir", str(config_home_imap),
+        "--save-attachments", str(dest),
+    ])
+
+    assert result.exit_code == 0
+    assert (dest / "report.pdf").read_bytes() == b"%PDF-1.4"
+
+
+@patch("emailcli.cli.ImapReceiver")
+def test_watch_timeout_exits_2(mock_receiver_cls, runner, config_home_imap):
+    mock_receiver = MagicMock()
+    mock_receiver.wait_for_message.return_value = None
+    mock_receiver_cls.return_value = mock_receiver
+
+    result = runner.invoke(cli, [
+        "watch", "--timeout", "1", "--config-dir", str(config_home_imap),
+    ])
+
+    assert result.exit_code == 2
+    assert "Timed out" in result.output
+
+
+def test_watch_without_imap_config(runner, config_home):
+    result = runner.invoke(cli, ["watch", "--config-dir", str(config_home)])
+
+    assert result.exit_code == 1
+    assert "IMAP" in result.output
+
+
+@patch("emailcli.cli.ImapReceiver")
+def test_watch_passes_options(mock_receiver_cls, runner, config_home_imap):
+    mock_receiver = MagicMock()
+    mock_receiver.wait_for_message.return_value = _sample_incoming_message()
+    mock_receiver_cls.return_value = mock_receiver
+
+    result = runner.invoke(cli, [
+        "watch",
+        "--timeout", "300",
+        "--poll-interval", "5",
+        "--mailbox", "Work",
+        "--config-dir", str(config_home_imap),
+    ])
+
+    assert result.exit_code == 0
+    mock_receiver.wait_for_message.assert_called_once_with(
+        mailbox="Work", timeout=300.0, poll_interval=5.0
+    )
+
+
+def test_init_with_imap(runner, tmp_path):
+    config_dir = tmp_path / ".emailcli"
+    result = runner.invoke(cli, [
+        "init",
+        "--config-dir", str(config_dir),
+    ], input=(
+        "me@163.com\nsmtp.163.com\n465\nme@163.com\nmypassword\nssl\n"  # smtp
+        "y\nimap.163.com\n993\nme@163.com\n\nssl\n"  # imap, empty password = reuse
+    ))
+    assert result.exit_code == 0
+
+    data = yaml.safe_load((config_dir / "config.yaml").read_text())
+    assert data["imap"]["host"] == "imap.163.com"
+    assert data["imap"]["port"] == 993
+    assert "password" not in data["imap"]  # falls back to smtp password
+
+
+def test_config_show_with_imap(runner, config_home_imap):
+    result = runner.invoke(cli, ["config", "show", "--config-dir", str(config_home_imap)])
+    assert result.exit_code == 0
+    assert "imap.example.com" in result.output
+    assert "secret" not in result.output

@@ -6,6 +6,7 @@ import click
 from emailcli.config import load_config
 from emailcli.exceptions import EmailCliError
 from emailcli.message import build_message
+from emailcli.receiver import ImapReceiver, extract_body, save_attachments
 from emailcli.sender import SmtpSender
 from emailcli import skill_install
 
@@ -75,6 +76,71 @@ def send(to_addrs, subject, body, html_content, html_file_path, attachments, fro
 
 
 @cli.command()
+@click.option("--timeout", default=0.0, type=float, help="Max seconds to wait for a new email (0 = wait forever).")
+@click.option("--poll-interval", default=10.0, type=float, show_default=True, help="Seconds between mailbox checks.")
+@click.option("--save-attachments", "attachments_dir", default=None, type=click.Path(file_okay=False), help="Directory to save attachments into.")
+@click.option("--mailbox", default="INBOX", show_default=True, help="Mailbox to watch.")
+@click.option("--config-dir", default=None, type=click.Path(), hidden=True, help="Config directory (for testing).")
+def watch(timeout, poll_interval, attachments_dir, mailbox, config_dir):
+    """Wait for the next incoming email, print it, then exit.
+
+    Only emails arriving after the command starts are matched. Exits with
+    code 0 when an email was received, 2 on timeout.
+    """
+    try:
+        cfg_dir = Path(config_dir) if config_dir else None
+        config = load_config(cfg_dir)
+
+        if config.imap is None:
+            raise EmailCliError(
+                "No IMAP settings in config. Re-run 'emailcli init' "
+                "or add an 'imap' section to config.yaml."
+            )
+
+        receiver = ImapReceiver(
+            host=config.imap.host,
+            port=config.imap.port,
+            username=config.imap.username,
+            password=config.imap.password,
+            encryption=config.imap.encryption,
+        )
+
+        click.echo(f"Waiting for new email in {mailbox}... (Ctrl-C to stop)", err=True)
+        msg = receiver.wait_for_message(
+            mailbox=mailbox, timeout=timeout, poll_interval=poll_interval
+        )
+        if msg is None:
+            click.echo(f"Timed out after {timeout:g}s with no new email.", err=True)
+            raise SystemExit(2)
+
+        click.echo(f"From:    {msg.get('From', '')}")
+        click.echo(f"To:      {msg.get('To', '')}")
+        click.echo(f"Subject: {msg.get('Subject', '')}")
+        click.echo(f"Date:    {msg.get('Date', '')}")
+        click.echo("")
+
+        body, kind = extract_body(msg)
+        if body:
+            if kind == "html":
+                click.echo("(HTML body)", err=True)
+            click.echo(body)
+        else:
+            click.echo("(no text body)", err=True)
+
+        if attachments_dir:
+            saved = save_attachments(msg, Path(attachments_dir))
+            if saved:
+                for path in saved:
+                    click.echo(f"Saved attachment: {path}", err=True)
+            else:
+                click.echo("No attachments.", err=True)
+    except EmailCliError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+
+
+@cli.command()
 @click.option("--config-dir", default=None, type=click.Path(), hidden=True, help="Config directory (for testing).")
 def init(config_dir):
     """Initialize emailcli configuration."""
@@ -101,6 +167,25 @@ def init(config_dir):
         "Encryption (starttls/ssl/none)", default="ssl"
     )
 
+    imap_section = None
+    if click.confirm("\nConfigure IMAP (needed for 'emailcli watch')?", default=False):
+        imap_host = click.prompt("IMAP host")
+        imap_port = click.prompt("IMAP port", type=int, default=993)
+        imap_username = click.prompt("IMAP username", default=smtp_username)
+        imap_password = click.prompt(
+            "IMAP password (empty = same as SMTP)",
+            hide_input=True, default="", show_default=False,
+        )
+        imap_encryption = click.prompt("IMAP encryption (ssl/starttls/none)", default="ssl")
+        imap_section = {
+            "host": imap_host,
+            "port": imap_port,
+            "username": imap_username,
+            "encryption": imap_encryption,
+        }
+        if imap_password:
+            imap_section["password"] = imap_password
+
     config_data = {
         "from": from_addr,
         "smtp": {
@@ -111,6 +196,8 @@ def init(config_dir):
             "encryption": smtp_encryption,
         },
     }
+    if imap_section:
+        config_data["imap"] = imap_section
 
     cfg_dir.mkdir(parents=True, exist_ok=True)
     with open(config_file, "w") as f:
@@ -139,6 +226,12 @@ def show(config_dir):
         click.echo(f"Username:   {cfg.smtp_username}")
         click.echo(f"Password:   ***")
         click.echo(f"Encryption: {cfg.smtp_encryption}")
+        if cfg.imap:
+            click.echo("")
+            click.echo(f"IMAP Host:  {cfg.imap.host}")
+            click.echo(f"IMAP Port:  {cfg.imap.port}")
+            click.echo(f"IMAP User:  {cfg.imap.username}")
+            click.echo(f"IMAP Encryption: {cfg.imap.encryption}")
     except EmailCliError as e:
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1)

@@ -1,6 +1,6 @@
 [project]
 name = "email-cli-tool"
-version = "0.2.1"
+version = "0.3.0"
 description = "A simple CLI tool for sending emails with plain text, HTML, and file attachments"
 readme = "README.md"
 license = "MIT"

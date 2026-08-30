@@ -12,6 +12,7 @@
 - Direct SMTP connection (SSL / STARTTLS)
 - Interactive configuration wizard
 - Read body content from stdin
+- Wait for the next incoming email (IMAP) and download its attachments
 
 ## Installation
 
@@ -82,6 +83,18 @@ echo "Content" | emailcli send \
   --to user@example.com --subject "Piped" --body -
 ```
 
+### 3. Wait for Incoming Email
+
+```bash
+# Block until the next email arrives, print it, then exit
+emailcli watch
+
+# Wait up to 5 minutes and save attachments
+emailcli watch --timeout 300 --save-attachments ./downloads
+```
+
+Requires IMAP settings — `emailcli init` asks for them, or add an `imap` section to the config (see below).
+
 ## Command Reference
 
 ### `emailcli send`
@@ -97,6 +110,17 @@ echo "Content" | emailcli send \
 | `--from` | | | Override sender address from config |
 
 > At least one of `--body`, `--html`, or `--html-file` is required.
+
+### `emailcli watch`
+
+Wait for the next incoming email (via IMAP polling), print headers and body to stdout, then exit. Only emails arriving **after** the command starts are matched; the received email is marked as read.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--timeout` | `0` (wait forever) | Max seconds to wait; exits with code `2` on timeout |
+| `--poll-interval` | `10` | Seconds between mailbox checks |
+| `--save-attachments` | | Directory to save attachments into |
+| `--mailbox` | `INBOX` | Mailbox to watch |
 
 ### `emailcli init`
 
@@ -133,6 +157,13 @@ smtp:
   username: yourname@gmail.com
   password: your-app-password
   encryption: ssl  # ssl | starttls | none
+
+# Optional, only needed for `emailcli watch`
+imap:
+  host: imap.gmail.com
+  port: 993        # default: 993
+  encryption: ssl  # default: ssl
+  # username/password default to the smtp values
 ```
 
 ## Development
