@@ -35,6 +35,13 @@ class ImapReceiver:
                 if self.encryption == "starttls":
                     conn.starttls()
             conn.login(self.username, self.password)
+            # NetEase servers (163.com/126.com) reject SELECT with "Unsafe
+            # Login" until the client identifies itself via the ID extension.
+            if "ID" in conn.capabilities:
+                try:
+                    conn.xatom("ID", '("name" "emailcli" "vendor" "emailcli")')
+                except Exception:
+                    pass
             return conn
         except Exception as e:
             raise ReceiveError(f"Failed to connect to IMAP server: {e}") from e
@@ -54,17 +61,26 @@ class ImapReceiver:
         """
         conn = self._connect()
         try:
+            # Some servers (163.com among them) answer STATUS with OK but
+            # silently omit UIDNEXT, so treat STATUS as a hint only and fall
+            # back to one past the highest existing UID.
+            uidnext = None
             typ, data = conn.status(mailbox, "(UIDNEXT)")
-            if typ != "OK":
-                raise ReceiveError(f"IMAP STATUS failed: {data}")
-            match = _UIDNEXT_RE.search(data[0])
-            if not match:
-                raise ReceiveError(f"Could not read UIDNEXT from: {data[0]!r}")
-            uidnext = int(match.group(1))
+            if typ == "OK" and data and data[0]:
+                match = _UIDNEXT_RE.search(data[0])
+                if match:
+                    uidnext = int(match.group(1))
 
             typ, data = conn.select(mailbox)
             if typ != "OK":
                 raise ReceiveError(f"Cannot select mailbox {mailbox!r}: {data}")
+
+            if uidnext is None:
+                typ, data = conn.uid("search", "UID", "1:*")
+                if typ != "OK":
+                    raise ReceiveError(f"IMAP SEARCH failed: {data}")
+                uids = [int(u) for u in data[0].split()] if data and data[0] else []
+                uidnext = max(uids) + 1 if uids else 1
 
             deadline = time.monotonic() + timeout if timeout > 0 else None
             while True:

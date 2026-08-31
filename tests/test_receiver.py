@@ -102,12 +102,85 @@ def test_connect_failure_raises_receive_error(mock_imap_cls):
 
 
 @patch("emailcli.receiver.imaplib.IMAP4_SSL")
-def test_bad_status_raises(mock_imap_cls):
-    conn = MagicMock()
-    conn.status.return_value = ("NO", [b"error"])
+def test_status_without_uidnext_falls_back_to_max_uid(mock_imap_cls):
+    # 163.com answers STATUS with OK but omits UIDNEXT; the watermark must
+    # then come from the highest existing UID (99 -> watch from 100).
+    raw = make_raw_message()
+    conn = make_conn([b"1 2 99", b"99 100"], raw=raw)
+    conn.status.return_value = ("OK", [b'"INBOX" ()'])
     mock_imap_cls.return_value = conn
 
-    with pytest.raises(ReceiveError, match="STATUS"):
+    msg = make_receiver().wait_for_message(timeout=5, poll_interval=0.01)
+
+    assert msg is not None
+    conn.uid.assert_any_call("search", "UID", "1:*")
+    conn.uid.assert_any_call("search", "UID", "100:*")
+    conn.uid.assert_any_call("fetch", "100", "(RFC822)")
+
+
+@patch("emailcli.receiver.imaplib.IMAP4_SSL")
+def test_status_failure_falls_back(mock_imap_cls):
+    raw = make_raw_message()
+    conn = make_conn([b"99", b"100"], raw=raw)
+    conn.status.return_value = ("NO", [b"STATUS unsupported"])
+    mock_imap_cls.return_value = conn
+
+    msg = make_receiver().wait_for_message(timeout=5, poll_interval=0.01)
+
+    assert msg is not None
+    conn.uid.assert_any_call("fetch", "100", "(RFC822)")
+
+
+@patch("emailcli.receiver.imaplib.IMAP4_SSL")
+def test_fallback_on_empty_mailbox_watches_from_uid_1(mock_imap_cls):
+    raw = make_raw_message()
+    conn = make_conn([b"", b"1"], raw=raw)
+    conn.status.return_value = ("OK", [b'"INBOX" ()'])
+    mock_imap_cls.return_value = conn
+
+    msg = make_receiver().wait_for_message(timeout=5, poll_interval=0.01)
+
+    assert msg is not None
+    conn.uid.assert_any_call("fetch", "1", "(RFC822)")
+
+
+@patch("emailcli.receiver.imaplib.IMAP4_SSL")
+def test_sends_imap_id_when_supported(mock_imap_cls):
+    # NetEase (163.com) rejects SELECT with "Unsafe Login" unless the client
+    # introduces itself via the ID extension right after login.
+    raw = make_raw_message()
+    conn = make_conn([b"100"], raw=raw)
+    conn.capabilities = ("IMAP4REV1", "ID")
+    mock_imap_cls.return_value = conn
+
+    msg = make_receiver().wait_for_message(timeout=5, poll_interval=0.01)
+
+    assert msg is not None
+    conn.xatom.assert_called_once()
+    assert conn.xatom.call_args[0][0] == "ID"
+
+
+@patch("emailcli.receiver.imaplib.IMAP4_SSL")
+def test_no_imap_id_when_unsupported(mock_imap_cls):
+    raw = make_raw_message()
+    conn = make_conn([b"100"], raw=raw)
+    conn.capabilities = ("IMAP4REV1",)
+    mock_imap_cls.return_value = conn
+
+    msg = make_receiver().wait_for_message(timeout=5, poll_interval=0.01)
+
+    assert msg is not None
+    conn.xatom.assert_not_called()
+
+
+@patch("emailcli.receiver.imaplib.IMAP4_SSL")
+def test_bad_select_raises(mock_imap_cls):
+    conn = MagicMock()
+    conn.status.return_value = ("OK", [b"INBOX (UIDNEXT 100)"])
+    conn.select.return_value = ("NO", [b"no such mailbox"])
+    mock_imap_cls.return_value = conn
+
+    with pytest.raises(ReceiveError, match="select"):
         make_receiver().wait_for_message(timeout=1, poll_interval=0.01)
 
 
