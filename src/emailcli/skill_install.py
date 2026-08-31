@@ -3,7 +3,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Literal
 
-SKILL_NAME = "send-email"
+SKILL_NAMES = ["send-email", "wait-email"]
 
 # target name -> home subdirectory that holds the agent's skills
 TARGET_HOME_DIRS = {
@@ -18,48 +18,54 @@ TARGET_LABELS = {
 }
 
 
-def load_skill_content() -> str:
-    """Read the bundled SKILL.md shipped as package data."""
+def load_skill_content(skill_name: str) -> str:
+    """Read a bundled SKILL.md shipped as package data."""
     return (
         files("emailcli")
-        .joinpath(f"skills/{SKILL_NAME}/SKILL.md")
+        .joinpath(f"skills/{skill_name}/SKILL.md")
         .read_text(encoding="utf-8")
     )
 
 
-def skill_dest(home: Path, target: str) -> Path:
+def skill_dest(home: Path, target: str, skill_name: str) -> Path:
     """Destination SKILL.md path for a target under the given home dir."""
-    return home / TARGET_HOME_DIRS[target] / "skills" / SKILL_NAME / "SKILL.md"
+    return home / TARGET_HOME_DIRS[target] / "skills" / skill_name / "SKILL.md"
 
 
 @dataclass
 class InstallResult:
     target: str
+    skill: str
     path: Path
     status: Literal["created", "updated", "failed"]
     error: str | None = None
 
 
 def install_skill(home: Path, targets: list[str]) -> list[InstallResult]:
-    """Write the bundled skill into each target's user-level skills dir.
+    """Write the bundled skills into each target's user-level skills dir.
 
-    Each target is handled independently; a write failure on one target is
-    recorded and does not stop the others.
+    Each (target, skill) pair is handled independently; a write failure on
+    one does not stop the others.
     """
     unknown = [t for t in targets if t not in TARGET_HOME_DIRS]
     if unknown:
         raise ValueError(f"Unknown target(s): {', '.join(unknown)}")
-    content = load_skill_content()
+    contents = {name: load_skill_content(name) for name in SKILL_NAMES}
     results: list[InstallResult] = []
     for target in targets:
-        dest = skill_dest(home, target)
-        try:
-            existed = dest.exists()
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(content, encoding="utf-8")
-            results.append(
-                InstallResult(target, dest, "updated" if existed else "created")
-            )
-        except OSError as exc:
-            results.append(InstallResult(target, dest, "failed", str(exc)))
+        for skill_name in SKILL_NAMES:
+            dest = skill_dest(home, target, skill_name)
+            try:
+                existed = dest.exists()
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(contents[skill_name], encoding="utf-8")
+                results.append(
+                    InstallResult(
+                        target, skill_name, dest, "updated" if existed else "created"
+                    )
+                )
+            except OSError as exc:
+                results.append(
+                    InstallResult(target, skill_name, dest, "failed", str(exc))
+                )
     return results

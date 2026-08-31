@@ -132,7 +132,7 @@ emailcli watch --timeout 300 --save-attachments ./downloads
 
 ### `emailcli skill install`
 
-安装 `send-email` 技能，让 Claude Code 或 Codex 可以直接帮你发邮件。
+安装 `send-email` 和 `wait-email` 技能，让 Claude Code 或 Codex 可以直接帮你收发邮件。
 
 ```bash
 # 默认同时安装到 Claude Code 和 Codex
@@ -143,7 +143,7 @@ emailcli skill install --target claude
 emailcli skill install --target codex
 ```
 
-会把 `SKILL.md` 写入 `~/.claude/skills/send-email/` 和/或 `~/.codex/skills/send-email/`。
+会把各技能的 `SKILL.md` 写入 `~/.claude/skills/` 和/或 `~/.codex/skills/` 下的同名目录。
 
 ## 配置文件
 

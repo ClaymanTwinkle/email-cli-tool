@@ -252,7 +252,7 @@ def skill_group():
 )
 @click.option("--home", default=None, type=click.Path(), hidden=True, help="Home directory (for testing).")
 def install(target, home):
-    """Install the send-email skill into Claude Code and/or Codex."""
+    """Install the emailcli agent skills into Claude Code and/or Codex."""
     home_dir = Path(home) if home else Path.home()
     targets = ["claude", "codex"] if target == "all" else [target]
 
