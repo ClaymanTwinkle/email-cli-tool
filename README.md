@@ -95,6 +95,21 @@ emailcli watch --timeout 300 --save-attachments ./downloads
 
 Requires IMAP settings — `emailcli init` asks for them, or add an `imap` section to the config (see below).
 
+### 4. Read Existing Emails
+
+```bash
+# List the 10 newest emails (UID, date, sender, subject)
+emailcli list
+
+# Read the newest email
+emailcli read
+
+# Read a specific email by UID and save its attachments
+emailcli read 1774452489 --save-attachments ./downloads
+```
+
+Also requires IMAP settings. Both commands open the mailbox read-only, so nothing is marked as read.
+
 ## Command Reference
 
 ### `emailcli send`
@@ -121,6 +136,24 @@ Wait for the next incoming email (via IMAP polling), print headers and body to s
 | `--poll-interval` | `10` | Seconds between mailbox checks |
 | `--save-attachments` | | Directory to save attachments into |
 | `--mailbox` | `INBOX` | Mailbox to watch |
+
+### `emailcli list`
+
+List the newest emails, newest first — one per line: UID, date, sender, subject (tab-separated). The mailbox is opened read-only, so nothing is marked as read.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--limit` | `10` | Number of newest messages to show |
+| `--mailbox` | `INBOX` | Mailbox to list |
+
+### `emailcli read [UID]`
+
+Read one email by UID (as shown by `emailcli list`), or the newest one when no UID is given. Prints headers and body like `watch`. The mailbox is opened read-only, so the message is not marked as read. Exits with code `2` when the mailbox is empty.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--save-attachments` | | Directory to save attachments into |
+| `--mailbox` | `INBOX` | Mailbox to read from |
 
 ### `emailcli init`
 

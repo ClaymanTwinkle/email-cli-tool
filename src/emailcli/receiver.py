@@ -111,18 +111,80 @@ class ImapReceiver:
             except Exception:
                 pass
 
-    def _fetch(self, conn: imaplib.IMAP4, uid: int) -> EmailMessage:
-        typ, msg_data = conn.uid("fetch", str(uid), "(RFC822)")
+    def list_messages(
+        self, mailbox: str = "INBOX", limit: int = 10
+    ) -> list[tuple[int, EmailMessage]]:
+        """Return (uid, headers) for the newest messages, newest first.
+
+        Only headers are fetched and the mailbox is opened read-only, so
+        nothing is marked as read. limit <= 0 means no limit.
+        """
+        conn = self._connect()
+        try:
+            uids = self._search_uids(conn, mailbox)
+            picked = uids[-limit:] if limit > 0 else uids
+            header_parts = "(BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE)])"
+            return [(u, self._fetch(conn, u, header_parts)) for u in reversed(picked)]
+        except ReceiveError:
+            raise
+        except Exception as e:
+            raise ReceiveError(f"Failed to list messages: {e}") from e
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
+    def get_message(
+        self, uid: int | None = None, mailbox: str = "INBOX"
+    ) -> tuple[int, EmailMessage] | None:
+        """Fetch one message by UID, or the newest one when uid is None.
+
+        Returns (uid, message), or None when the mailbox is empty. The
+        mailbox is opened read-only, so the message is not marked as read.
+        """
+        conn = self._connect()
+        try:
+            uids = self._search_uids(conn, mailbox)
+            if uid is not None:
+                if uid not in uids:
+                    raise ReceiveError(f"No message with UID {uid} in {mailbox}")
+                target = uid
+            elif uids:
+                target = uids[-1]
+            else:
+                return None
+            return target, self._fetch(conn, target)
+        except ReceiveError:
+            raise
+        except Exception as e:
+            raise ReceiveError(f"Failed to fetch message: {e}") from e
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
+    def _search_uids(self, conn: imaplib.IMAP4, mailbox: str) -> list[int]:
+        """Open mailbox read-only and return all UIDs in ascending order."""
+        typ, data = conn.select(mailbox, readonly=True)
+        if typ != "OK":
+            raise ReceiveError(f"Cannot select mailbox {mailbox!r}: {data}")
+        typ, data = conn.uid("search", "UID", "1:*")
+        if typ != "OK":
+            raise ReceiveError(f"IMAP SEARCH failed: {data}")
+        return sorted(int(u) for u in data[0].split()) if data and data[0] else []
+
+    def _fetch(
+        self, conn: imaplib.IMAP4, uid: int, parts: str = "(RFC822)"
+    ) -> EmailMessage:
+        typ, msg_data = conn.uid("fetch", str(uid), parts)
         if typ != "OK":
             raise ReceiveError(f"IMAP FETCH failed: {msg_data}")
-        raw = None
         for item in msg_data:
             if isinstance(item, tuple) and len(item) >= 2 and isinstance(item[1], (bytes, bytearray)):
-                raw = item[1]
-                break
-        if raw is None:
-            raise ReceiveError(f"Unexpected FETCH response for UID {uid}")
-        return email.message_from_bytes(raw, policy=email.policy.default)
+                return email.message_from_bytes(item[1], policy=email.policy.default)
+        raise ReceiveError(f"Unexpected FETCH response for UID {uid}")
 
 
 def extract_body(msg: EmailMessage) -> tuple[str, str]:

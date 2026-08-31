@@ -203,6 +203,61 @@ def test_starttls_connection(mock_imap_cls):
     conn.starttls.assert_called_once()
 
 
+@patch("emailcli.receiver.imaplib.IMAP4_SSL")
+def test_list_messages_newest_first(mock_imap_cls):
+    raw = make_raw_message()
+    conn = make_conn([b"5 7 9"], raw=raw)
+    mock_imap_cls.return_value = conn
+
+    rows = make_receiver().list_messages(limit=2)
+
+    assert [uid for uid, _ in rows] == [9, 7]
+    assert rows[0][1]["Subject"] == "Test mail"
+    conn.select.assert_called_once_with("INBOX", readonly=True)
+    conn.uid.assert_any_call(
+        "fetch", "9", "(BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE)])"
+    )
+
+
+@patch("emailcli.receiver.imaplib.IMAP4_SSL")
+def test_list_messages_empty_mailbox(mock_imap_cls):
+    conn = make_conn([b""])
+    mock_imap_cls.return_value = conn
+
+    assert make_receiver().list_messages() == []
+
+
+@patch("emailcli.receiver.imaplib.IMAP4_SSL")
+def test_get_message_latest(mock_imap_cls):
+    raw = make_raw_message()
+    conn = make_conn([b"5 9 7"], raw=raw)
+    mock_imap_cls.return_value = conn
+
+    uid, msg = make_receiver().get_message()
+
+    assert uid == 9
+    assert msg["Subject"] == "Test mail"
+    conn.select.assert_called_once_with("INBOX", readonly=True)
+    conn.uid.assert_any_call("fetch", "9", "(RFC822)")
+
+
+@patch("emailcli.receiver.imaplib.IMAP4_SSL")
+def test_get_message_by_missing_uid_raises(mock_imap_cls):
+    conn = make_conn([b"5 7"])
+    mock_imap_cls.return_value = conn
+
+    with pytest.raises(ReceiveError, match="UID 6"):
+        make_receiver().get_message(uid=6)
+
+
+@patch("emailcli.receiver.imaplib.IMAP4_SSL")
+def test_get_message_empty_mailbox_returns_none(mock_imap_cls):
+    conn = make_conn([b""])
+    mock_imap_cls.return_value = conn
+
+    assert make_receiver().get_message() is None
+
+
 def parse(raw):
     import email
     import email.policy

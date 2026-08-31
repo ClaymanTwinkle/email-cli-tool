@@ -95,6 +95,21 @@ emailcli watch --timeout 300 --save-attachments ./downloads
 
 需要 IMAP 配置 —— `emailcli init` 会询问，也可以手动在配置文件中加 `imap` 段（见下文）。
 
+### 4. 读取已有邮件
+
+```bash
+# 列出最新 10 封邮件（UID、日期、发件人、主题）
+emailcli list
+
+# 读取最新一封邮件
+emailcli read
+
+# 按 UID 读取指定邮件并保存附件
+emailcli read 1774452489 --save-attachments ./downloads
+```
+
+同样需要 IMAP 配置。两个命令都以只读方式打开邮箱，不会把邮件标记为已读。
+
 ## 命令参考
 
 ### `emailcli send`
@@ -121,6 +136,24 @@ emailcli watch --timeout 300 --save-attachments ./downloads
 | `--poll-interval` | `10` | 轮询间隔（秒） |
 | `--save-attachments` | | 附件保存目录 |
 | `--mailbox` | `INBOX` | 监听的邮箱文件夹 |
+
+### `emailcli list`
+
+列出最新的邮件，最新的在前 —— 每行一封：UID、日期、发件人、主题（制表符分隔）。以只读方式打开邮箱，不会把邮件标记为已读。
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--limit` | `10` | 显示最新几封 |
+| `--mailbox` | `INBOX` | 要列出的邮箱文件夹 |
+
+### `emailcli read [UID]`
+
+按 UID（见 `emailcli list`）读取一封邮件，不给 UID 则读最新一封。输出格式与 `watch` 相同。以只读方式打开邮箱，不会把邮件标记为已读。邮箱为空时退出码为 `2`。
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--save-attachments` | | 附件保存目录 |
+| `--mailbox` | `INBOX` | 要读取的邮箱文件夹 |
 
 ### `emailcli init`
 

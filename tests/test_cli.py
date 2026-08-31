@@ -345,6 +345,71 @@ def test_watch_passes_options(mock_receiver_cls, runner, config_home_imap):
     )
 
 
+@patch("emailcli.cli.ImapReceiver")
+def test_list_prints_rows(mock_receiver_cls, runner, config_home_imap):
+    mock_receiver = MagicMock()
+    mock_receiver.list_messages.return_value = [
+        (9, _sample_incoming_message()),
+        (7, _sample_incoming_message()),
+    ]
+    mock_receiver_cls.return_value = mock_receiver
+
+    result = runner.invoke(cli, ["list", "--config-dir", str(config_home_imap)])
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line]
+    assert lines[0].startswith("9\t")
+    assert "sender@example.com" in lines[0]
+    assert "Incoming" in lines[0]
+    mock_receiver.list_messages.assert_called_once_with(mailbox="INBOX", limit=10)
+
+
+@patch("emailcli.cli.ImapReceiver")
+def test_read_latest(mock_receiver_cls, runner, config_home_imap):
+    mock_receiver = MagicMock()
+    mock_receiver.get_message.return_value = (9, _sample_incoming_message())
+    mock_receiver_cls.return_value = mock_receiver
+
+    result = runner.invoke(cli, ["read", "--config-dir", str(config_home_imap)])
+
+    assert result.exit_code == 0
+    assert "Subject: Incoming" in result.output
+    assert "Incoming body" in result.output
+    mock_receiver.get_message.assert_called_once_with(uid=None, mailbox="INBOX")
+
+
+@patch("emailcli.cli.ImapReceiver")
+def test_read_by_uid_saves_attachments(mock_receiver_cls, runner, config_home_imap, tmp_path):
+    mock_receiver = MagicMock()
+    mock_receiver.get_message.return_value = (
+        9, _sample_incoming_message(attachments=[("report.pdf", b"%PDF-1.4")])
+    )
+    mock_receiver_cls.return_value = mock_receiver
+
+    dest = tmp_path / "downloads"
+    result = runner.invoke(cli, [
+        "read", "9",
+        "--config-dir", str(config_home_imap),
+        "--save-attachments", str(dest),
+    ])
+
+    assert result.exit_code == 0
+    assert (dest / "report.pdf").read_bytes() == b"%PDF-1.4"
+    mock_receiver.get_message.assert_called_once_with(uid=9, mailbox="INBOX")
+
+
+@patch("emailcli.cli.ImapReceiver")
+def test_read_empty_mailbox_exits_2(mock_receiver_cls, runner, config_home_imap):
+    mock_receiver = MagicMock()
+    mock_receiver.get_message.return_value = None
+    mock_receiver_cls.return_value = mock_receiver
+
+    result = runner.invoke(cli, ["read", "--config-dir", str(config_home_imap)])
+
+    assert result.exit_code == 2
+    assert "No messages" in result.output
+
+
 def test_init_with_imap(runner, tmp_path):
     config_dir = tmp_path / ".emailcli"
     result = runner.invoke(cli, [

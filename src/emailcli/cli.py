@@ -88,22 +88,7 @@ def watch(timeout, poll_interval, attachments_dir, mailbox, config_dir):
     code 0 when an email was received, 2 on timeout.
     """
     try:
-        cfg_dir = Path(config_dir) if config_dir else None
-        config = load_config(cfg_dir)
-
-        if config.imap is None:
-            raise EmailCliError(
-                "No IMAP settings in config. Re-run 'emailcli init' "
-                "or add an 'imap' section to config.yaml."
-            )
-
-        receiver = ImapReceiver(
-            host=config.imap.host,
-            port=config.imap.port,
-            username=config.imap.username,
-            password=config.imap.password,
-            encryption=config.imap.encryption,
-        )
+        receiver = _load_receiver(config_dir)
 
         click.echo(f"Waiting for new email in {mailbox}... (Ctrl-C to stop)", err=True)
         msg = receiver.wait_for_message(
@@ -113,31 +98,103 @@ def watch(timeout, poll_interval, attachments_dir, mailbox, config_dir):
             click.echo(f"Timed out after {timeout:g}s with no new email.", err=True)
             raise SystemExit(2)
 
-        click.echo(f"From:    {msg.get('From', '')}")
-        click.echo(f"To:      {msg.get('To', '')}")
-        click.echo(f"Subject: {msg.get('Subject', '')}")
-        click.echo(f"Date:    {msg.get('Date', '')}")
-        click.echo("")
-
-        body, kind = extract_body(msg)
-        if body:
-            if kind == "html":
-                click.echo("(HTML body)", err=True)
-            click.echo(body)
-        else:
-            click.echo("(no text body)", err=True)
-
-        if attachments_dir:
-            saved = save_attachments(msg, Path(attachments_dir))
-            if saved:
-                for path in saved:
-                    click.echo(f"Saved attachment: {path}", err=True)
-            else:
-                click.echo("No attachments.", err=True)
+        _print_message(msg, attachments_dir)
     except EmailCliError as e:
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1)
 
+
+def _load_receiver(config_dir):
+    cfg_dir = Path(config_dir) if config_dir else None
+    config = load_config(cfg_dir)
+
+    if config.imap is None:
+        raise EmailCliError(
+            "No IMAP settings in config. Re-run 'emailcli init' "
+            "or add an 'imap' section to config.yaml."
+        )
+
+    return ImapReceiver(
+        host=config.imap.host,
+        port=config.imap.port,
+        username=config.imap.username,
+        password=config.imap.password,
+        encryption=config.imap.encryption,
+    )
+
+
+def _print_message(msg, attachments_dir):
+    click.echo(f"From:    {msg.get('From', '')}")
+    click.echo(f"To:      {msg.get('To', '')}")
+    click.echo(f"Subject: {msg.get('Subject', '')}")
+    click.echo(f"Date:    {msg.get('Date', '')}")
+    click.echo("")
+
+    body, kind = extract_body(msg)
+    if body:
+        if kind == "html":
+            click.echo("(HTML body)", err=True)
+        click.echo(body)
+    else:
+        click.echo("(no text body)", err=True)
+
+    if attachments_dir:
+        saved = save_attachments(msg, Path(attachments_dir))
+        if saved:
+            for path in saved:
+                click.echo(f"Saved attachment: {path}", err=True)
+        else:
+            click.echo("No attachments.", err=True)
+
+
+@cli.command(name="list")
+@click.option("--limit", default=10, show_default=True, help="Number of newest messages to show.")
+@click.option("--mailbox", default="INBOX", show_default=True, help="Mailbox to list.")
+@click.option("--config-dir", default=None, type=click.Path(), hidden=True, help="Config directory (for testing).")
+def list_cmd(limit, mailbox, config_dir):
+    """List the newest emails, newest first.
+
+    One message per line: UID, date, sender, subject (tab-separated). The
+    mailbox is opened read-only, so nothing is marked as read. Pass the
+    UID to 'emailcli read' to read a message.
+    """
+    try:
+        receiver = _load_receiver(config_dir)
+        rows = receiver.list_messages(mailbox=mailbox, limit=limit)
+        if not rows:
+            click.echo(f"No messages in {mailbox}.", err=True)
+            return
+        for uid, msg in rows:
+            click.echo(
+                f"{uid}\t{msg.get('Date', '')}\t{msg.get('From', '')}\t{msg.get('Subject', '')}"
+            )
+    except EmailCliError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+
+@cli.command()
+@click.argument("uid", required=False, type=int)
+@click.option("--save-attachments", "attachments_dir", default=None, type=click.Path(file_okay=False), help="Directory to save attachments into.")
+@click.option("--mailbox", default="INBOX", show_default=True, help="Mailbox to read from.")
+@click.option("--config-dir", default=None, type=click.Path(), hidden=True, help="Config directory (for testing).")
+def read(uid, attachments_dir, mailbox, config_dir):
+    """Read one email by UID (see 'emailcli list'), or the newest one.
+
+    The mailbox is opened read-only, so the message is not marked as read.
+    Exits with code 2 when the mailbox is empty.
+    """
+    try:
+        receiver = _load_receiver(config_dir)
+        result = receiver.get_message(uid=uid, mailbox=mailbox)
+        if result is None:
+            click.echo(f"No messages in {mailbox}.", err=True)
+            raise SystemExit(2)
+        _, msg = result
+        _print_message(msg, attachments_dir)
+    except EmailCliError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
 
 
 @cli.command()
