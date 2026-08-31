@@ -165,7 +165,7 @@ Display current configuration (password is masked).
 
 ### `emailcli skill install`
 
-Install the `send-email` and `wait-email` agent skills so Claude Code or Codex can send and receive mail for you.
+Install the `send-email`, `wait-email`, and `read-email` agent skills so Claude Code or Codex can send, receive, and read mail for you.
 
 ```bash
 # Install for both Claude Code and Codex (default)

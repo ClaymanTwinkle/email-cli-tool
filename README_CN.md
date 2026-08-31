@@ -165,7 +165,7 @@ emailcli read 1774452489 --save-attachments ./downloads
 
 ### `emailcli skill install`
 
-安装 `send-email` 和 `wait-email` 技能，让 Claude Code 或 Codex 可以直接帮你收发邮件。
+安装 `send-email`、`wait-email` 和 `read-email` 技能，让 Claude Code 或 Codex 可以直接帮你收发和读取邮件。
 
 ```bash
 # 默认同时安装到 Claude Code 和 Codex

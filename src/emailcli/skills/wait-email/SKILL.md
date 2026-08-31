@@ -1,6 +1,6 @@
 ---
 name: wait-email
-description: "Wait for the next incoming email via emailcli. Prints sender/subject/body and downloads attachments. Use when the user wants to wait for, receive, or read an incoming email."
+description: "Wait for the next incoming email via emailcli. Prints sender/subject/body and downloads attachments. Use when the user wants to wait for or receive an email that has not arrived yet; for mail already in the inbox use the read-email skill."
 ---
 
 # Wait for Email

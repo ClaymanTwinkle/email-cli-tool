@@ -27,6 +27,14 @@ def test_bundled_wait_email_skill_is_packaged():
     assert "emailcli watch" in content
 
 
+def test_bundled_read_email_skill_is_packaged():
+    content = files("emailcli").joinpath("skills/read-email/SKILL.md").read_text(encoding="utf-8")
+    assert content.startswith("---")
+    assert "name: read-email" in content
+    assert "emailcli list" in content
+    assert "emailcli read" in content
+
+
 def test_install_all_writes_both_targets(tmp_path):
     results = install_skill(tmp_path, ["claude", "codex"])
 

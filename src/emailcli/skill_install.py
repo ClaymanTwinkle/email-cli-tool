@@ -3,7 +3,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Literal
 
-SKILL_NAMES = ["send-email", "wait-email"]
+SKILL_NAMES = ["send-email", "wait-email", "read-email"]
 
 # target name -> home subdirectory that holds the agent's skills
 TARGET_HOME_DIRS = {
